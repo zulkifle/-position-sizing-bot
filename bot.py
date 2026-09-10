@@ -53,7 +53,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
             return
 
         # Extract values
-        code = lines[1].strip()
+        code = lines[0].strip()  # MY.CODE is first line
 
         ep = None
         sl = None
@@ -61,7 +61,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
         stars = None
         env = "SIMULATE"
 
-        for line in lines[2:]:
+        for line in lines[1:]:
             if line.startswith('EP='):
                 ep = float(line.replace('EP=', '').strip())
             elif line.startswith('SL='):
