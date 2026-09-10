@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: position-sizing-bot
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: position-sizing-bot
+  template:
+    metadata:
+      labels:
+        app: position-sizing-bot
+    spec:
+      containers:
+      - name: bot
+        image: zulkifle/position-sizing-bot:latest  # Replace with your Docker Hub username
+        imagePullPolicy: Always
+        env:
+        - name: TELEGRAM_BOT_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-secret
+              key: bot-token
+        - name: RAILWAY_PUBLIC_DOMAIN
+          value: "position-sizing-bot.YOUR_DOMAIN.com"  # Replace with your domain
+        - name: PORT
+          value: "8080"
+        ports:
+        - containerPort: 8080
+          name: http
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - import telegram; print('OK')
+          initialDelaySeconds: 10
+          periodSeconds: 30
+          timeoutSeconds: 5
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: position-sizing-bot
+  namespace: default
+spec:
+  type: LoadBalancer
+  selector:
+    app: position-sizing-bot
+  ports:
+  - port: 80
+    targetPort: 8080
+    protocol: TCP
+    name: http
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: telegram-secret
+  namespace: default
+type: Opaque
+stringData:
+  bot-token: "YOUR_BOT_TOKEN_HERE"  # Replace with actual token
