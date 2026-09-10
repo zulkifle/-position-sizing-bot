@@ -44,9 +44,10 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "EP=2.28\n"
                 "SL=2.25\n"
                 "ATR=0.08\n"
-                "3★\n"
+                "3STAR\n"
                 "Env : REAL`\n\n"
-                "(Env line optional, defaults to SIMULATE)",
+                "(Env line optional, defaults to SIMULATE)\n"
+                "(Risk: 1STAR to 5STAR)",
                 parse_mode="Markdown"
             )
             return
@@ -67,9 +68,9 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 sl = float(line.replace('SL=', '').strip())
             elif line.startswith('ATR='):
                 atr = float(line.replace('ATR=', '').strip())
-            elif '★' in line:
-                star_str = line.replace('★', '').strip()
-                stars = int(star_str)
+            elif 'STAR' in line.upper():
+                star_str = line.upper().replace('STAR', '').strip()
+                stars = int(star_str) if star_str else None
             elif 'Env' in line or 'REAL' in line or 'SIMULATE' in line:
                 env = 'REAL' if 'REAL' in line else 'SIMULATE'
 
@@ -146,7 +147,7 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) ->
 def format_response(code: str, ep: float, sl: float, atr: float, stars: int, result: dict, env: str) -> str:
     """Format calculation as pretty table"""
 
-    star_display = "★" * stars + "☆" * (5 - stars)
+    r_label = {1: "0.05R", 2: "0.125R", 3: "0.25R", 4: "0.5R", 5: "1R"}[stars]
 
     response = (
         f"📊 *Position Sizing — {code}*\n"
@@ -155,7 +156,7 @@ def format_response(code: str, ep: float, sl: float, atr: float, stars: int, res
         f"└ Entry Price (EP): RM{ep:.2f}\n"
         f"└ Stop Loss (SL): RM{sl:.2f}\n"
         f"└ ATR: {atr:.3f}\n"
-        f"└ Risk Level: {stars}★ {star_display} ({result['risk_amount']:.0f} RM)\n\n"
+        f"└ Risk Level: {stars}STAR ({r_label}, RM{result['risk_amount']:.0f})\n\n"
         f"*Calculation:*\n"
         f"```\n"
         f"Lots            {result['lots']} lot(s)\n"
@@ -178,8 +179,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "EP=price\n"
         "SL=price\n"
         "ATR=value\n"
-        "3★\n"
+        "3STAR\n"
         "Env : REAL`\n\n"
+        "(Risk: 5STAR=1R, 4STAR=0.5R, 3STAR=0.25R, 2STAR=0.125R, 1STAR=0.05R)\n\n"
         "Get instant position size calculation! ⚡",
         parse_mode="Markdown"
     )
