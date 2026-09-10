@@ -28,25 +28,25 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
 
     message_text = update.message.text.strip()
 
-    # Skip if not a calculation request
-    if not message_text.startswith('execute'):
+    # Skip if not a calculation request (must have MY. code + EP/SL/ATR)
+    if 'MY.' not in message_text or 'EP=' not in message_text:
         return
 
     try:
         # Parse input
         lines = [line.strip() for line in message_text.split('\n') if line.strip()]
 
-        if len(lines) < 5:
+        if len(lines) < 4:
             await update.message.reply_text(
                 "❌ Format error.\n\n"
                 "Expected:\n"
-                "`execute\n"
-                "MY.CODE\n"
+                "`MY.CODE\n"
                 "EP=2.28\n"
                 "SL=2.25\n"
                 "ATR=0.08\n"
                 "3★\n"
-                "Env : REAL`",
+                "Env : REAL`\n\n"
+                "(Env line optional, defaults to SIMULATE)",
                 parse_mode="Markdown"
             )
             return
@@ -174,8 +174,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "🤖 *Position Sizing Bot*\n\n"
         "Send:\n"
-        "`execute\n"
-        "MY.CODE\n"
+        "`MY.CODE\n"
         "EP=price\n"
         "SL=price\n"
         "ATR=value\n"
