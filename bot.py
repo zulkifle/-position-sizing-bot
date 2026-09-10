@@ -44,10 +44,10 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "EP=2.28\n"
                 "SL=2.25\n"
                 "ATR=0.08\n"
-                "3STAR\n"
+                "3 STAR\n"
                 "Env : REAL`\n\n"
                 "(Env line optional, defaults to SIMULATE)\n"
-                "(Risk: 1STAR to 5STAR)",
+                "(Risk: 1 STAR to 5 STAR)",
                 parse_mode="Markdown"
             )
             return
@@ -69,8 +69,12 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
             elif line.startswith('ATR='):
                 atr = float(line.replace('ATR=', '').strip())
             elif 'STAR' in line.upper():
+                # Handle "3 STAR" or "3STAR" format
                 star_str = line.upper().replace('STAR', '').strip()
-                stars = int(star_str) if star_str else None
+                try:
+                    stars = int(star_str) if star_str else None
+                except ValueError:
+                    stars = None
             elif 'Env' in line or 'REAL' in line or 'SIMULATE' in line:
                 env = 'REAL' if 'REAL' in line else 'SIMULATE'
 
@@ -179,7 +183,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "EP=price\n"
         "SL=price\n"
         "ATR=value\n"
-        "3STAR\n"
+        "3 STAR\n"
         "Env : REAL`\n\n"
         "(Risk: 5STAR=1R, 4STAR=0.5R, 3STAR=0.25R, 2STAR=0.125R, 1STAR=0.05R)\n\n"
         "Get instant position size calculation! ⚡",
