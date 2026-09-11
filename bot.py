@@ -44,10 +44,10 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "EP=2.28\n"
                 "SL=2.25\n"
                 "ATR=0.08\n"
-                "3 STAR\n"
+                "STAR=3\n"
                 "Env : REAL`\n\n"
-                "(Env line optional, defaults to SIMULATE)\n"
-                "(Risk: 1 STAR to 5 STAR)",
+                "(STAR: use 1-5 for star rating OR 1/0.5/0.25/0.125/0.05 for R-value)\n"
+                "(Env line optional, defaults to SIMULATE)",
                 parse_mode="Markdown"
             )
             return
@@ -68,12 +68,29 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 sl = float(line.replace('SL=', '').strip())
             elif line.startswith('ATR='):
                 atr = float(line.replace('ATR=', '').strip())
-            elif 'STAR' in line.upper():
-                # Handle "3 STAR" or "3STAR" format
-                star_str = line.upper().replace('STAR', '').strip()
+            elif 'STAR' in line.upper() and '=' in line:
+                # Handle "STAR=3" or "STAR=0.25" format
                 try:
-                    stars = int(star_str) if star_str else None
-                except ValueError:
+                    star_value_str = line.split('=')[1].strip()
+                    star_value = float(star_value_str)
+
+                    # Map to star rating (1-5)
+                    if star_value in [1, 2, 3, 4, 5]:
+                        # Direct star rating (1-5)
+                        stars = int(star_value)
+                    elif star_value == 1.0:
+                        stars = 5  # 1R = 5 star
+                    elif star_value == 0.5:
+                        stars = 4  # 0.5R = 4 star
+                    elif star_value == 0.25:
+                        stars = 3  # 0.25R = 3 star
+                    elif star_value == 0.125:
+                        stars = 2  # 0.125R = 2 star
+                    elif star_value == 0.05:
+                        stars = 1  # 0.05R = 1 star
+                    else:
+                        stars = None
+                except (ValueError, IndexError):
                     stars = None
             elif 'Env' in line or 'REAL' in line or 'SIMULATE' in line:
                 env = 'REAL' if 'REAL' in line else 'SIMULATE'
@@ -183,9 +200,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "EP=price\n"
         "SL=price\n"
         "ATR=value\n"
-        "3 STAR\n"
+        "STAR=3\n"
         "Env : REAL`\n\n"
-        "(Risk: 5STAR=1R, 4STAR=0.5R, 3STAR=0.25R, 2STAR=0.125R, 1STAR=0.05R)\n\n"
+        "*STAR options:*\n"
+        "Star rating: `STAR=1` to `STAR=5`\n"
+        "Or R-value: `STAR=1` (1R), `STAR=0.5` (0.5R), `STAR=0.25` (0.25R), etc.\n\n"
         "Get instant position size calculation! ⚡",
         parse_mode="Markdown"
     )
