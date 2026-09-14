@@ -177,36 +177,60 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int, eq
     else:
         effective_sl = ep - sl
 
-    # Lot size = floor(risk_amount / (effective_sl × 100))
-    lot_size = int(risk_amount / (effective_sl * BURSA_LOT_SIZE))
+    # Initial lot size = floor(risk_amount / (effective_sl × 100))
+    initial_lot_size = int(risk_amount / (effective_sl * BURSA_LOT_SIZE))
+    if initial_lot_size < 1:
+        initial_lot_size = 1
 
+    # Adjust lot size so total max loss = target risk
+    lot_size = initial_lot_size
+    target_loss = risk_amount
+
+    while lot_size > 0:
+        qty = lot_size * BURSA_LOT_SIZE
+        capital = ep * qty
+        max_loss_price = effective_sl * qty
+
+        # Calculate fees
+        entry_fees = calculate_bursa_fees(capital)
+        exit_fees = calculate_bursa_fees(sl * qty)
+
+        # Total max loss (price + fees)
+        total_max_loss = max_loss_price + entry_fees['total'] + exit_fees['total']
+
+        # Check if within target risk
+        if total_max_loss <= target_loss:
+            # Found the right lot size
+            break
+
+        # Otherwise, reduce lot size and try again
+        lot_size -= 1
+
+    # If lot_size became 0, use 1 lot (minimum)
     if lot_size < 1:
         lot_size = 1
+        qty = lot_size * BURSA_LOT_SIZE
+        capital = ep * qty
+        max_loss_price = effective_sl * qty
+        entry_fees = calculate_bursa_fees(capital)
+        exit_fees = calculate_bursa_fees(sl * qty)
+        total_max_loss = max_loss_price + entry_fees['total'] + exit_fees['total']
 
-    # Calculate final values
-    qty = lot_size * BURSA_LOT_SIZE
-    capital = ep * qty
-    max_loss = effective_sl * qty
-
-    # Calculate trading fees
-    entry_fees = calculate_bursa_fees(capital)
-    exit_fees = calculate_bursa_fees(sl * qty)  # Fees on exit at SL price
-
-    # Total capital needed (including entry fees)
+    # Final values
     total_capital = capital + entry_fees['total']
-
-    # Max loss including both entry and exit fees
-    max_loss_with_fees = max_loss + entry_fees['total'] + exit_fees['total']
+    adjusted = lot_size != initial_lot_size  # Track if lot size was adjusted
 
     return {
         'lots': lot_size,
+        'initial_lots': initial_lot_size,
+        'adjusted': adjusted,
         'qty': qty,
         'capital': capital,
         'entry_fees': entry_fees,
         'exit_fees': exit_fees,
         'total_capital': total_capital,
-        'max_loss': max_loss,
-        'max_loss_with_fees': max_loss_with_fees,
+        'max_loss': max_loss_price,
+        'max_loss_with_fees': total_max_loss,
         'risk_amount': risk_amount,
         'effective_sl': effective_sl,
     }
@@ -221,7 +245,7 @@ def format_response(code: str, ep: float, sl: float, atr: float, stars: int, res
 
     response = (
         f"📊 *Position Sizing — {code}*\n"
-        f"Environment: `{env}` | Equity: `RM{equity:,.0f}`\n\n"
+        f"Environment: `{env}`\n\n"
         f"*Input:*\n"
         f"└ Entry Price (EP): RM{ep:.2f}\n"
         f"└ Stop Loss (SL): RM{sl:.2f}\n"
@@ -229,7 +253,14 @@ def format_response(code: str, ep: float, sl: float, atr: float, stars: int, res
         f"└ Risk Level: {stars}STAR ({r_label}, RM{result['risk_amount']:.0f})\n\n"
         f"*Calculation:*\n"
         f"```\n"
-        f"Lots            {result['lots']} lot(s)\n"
+        f"Lots            {result['lots']} lot(s)"
+    )
+
+    if result['adjusted']:
+        response += f" (adjusted from {result['initial_lots']})"
+
+    response += (
+        f"\n"
         f"Qty             {result['qty']:.0f} shares\n"
         f"Entry Value     RM{result['capital']:.2f}\n"
         f"```\n"
