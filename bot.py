@@ -23,6 +23,34 @@ R_MULTIPLIER = {
     0.25: 0.25,  # 3★
 }
 
+# Bursa Malaysia Trading Fees
+BROKERAGE_RATE = 0.0003  # 0.03%
+PLATFORM_FEE = 3.00      # RM3 per order
+CLEARING_FEE_RATE = 0.0003  # 0.03%
+STAMP_DUTY_PER_1000 = 1.00  # RM1 per RM1,000 (or part thereof), capped at RM1,000
+
+def calculate_bursa_fees(transaction_amount: float) -> dict:
+    """Calculate Bursa Malaysia trading fees for a transaction"""
+    import math
+
+    brokerage = round(transaction_amount * BROKERAGE_RATE, 2)
+    clearing = round(transaction_amount * CLEARING_FEE_RATE, 2)
+
+    # Stamp duty: RM1 per RM1,000 (or part thereof), capped at RM1,000
+    stamp_units = math.ceil(transaction_amount / 1000)
+    stamp_duty = min(stamp_units * STAMP_DUTY_PER_1000, 1000)
+
+    total_fees = round(brokerage + PLATFORM_FEE + clearing + stamp_duty, 2)
+
+    return {
+        'brokerage': brokerage,
+        'platform_fee': PLATFORM_FEE,
+        'clearing': clearing,
+        'stamp_duty': stamp_duty,
+        'total': total_fees,
+    }
+
+
 async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Parse request and calculate position size"""
 
@@ -155,20 +183,36 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) ->
     capital = ep * qty
     max_loss = effective_sl * qty
 
+    # Calculate trading fees
+    entry_fees = calculate_bursa_fees(capital)
+    exit_fees = calculate_bursa_fees(sl * qty)  # Fees on exit at SL price
+
+    # Total capital needed (including entry fees)
+    total_capital = capital + entry_fees['total']
+
+    # Max loss including both entry and exit fees
+    max_loss_with_fees = max_loss + entry_fees['total'] + exit_fees['total']
+
     return {
         'lots': lot_size,
         'qty': qty,
         'capital': capital,
+        'entry_fees': entry_fees,
+        'exit_fees': exit_fees,
+        'total_capital': total_capital,
         'max_loss': max_loss,
+        'max_loss_with_fees': max_loss_with_fees,
         'risk_amount': risk_amount,
         'effective_sl': effective_sl,
     }
 
 
 def format_response(code: str, ep: float, sl: float, atr: float, stars: int, result: dict, env: str) -> str:
-    """Format calculation as pretty table"""
+    """Format calculation as pretty table with fees"""
 
     r_label = {1: "0.05R", 2: "0.125R", 3: "0.25R", 4: "0.5R", 5: "1R"}[stars]
+    entry_fees = result['entry_fees']
+    exit_fees = result['exit_fees']
 
     response = (
         f"📊 *Position Sizing — {code}*\n"
@@ -182,9 +226,20 @@ def format_response(code: str, ep: float, sl: float, atr: float, stars: int, res
         f"```\n"
         f"Lots            {result['lots']} lot(s)\n"
         f"Qty             {result['qty']:.0f} shares\n"
-        f"Capital         RM{result['capital']:.2f}\n"
-        f"Max Loss (SL)   RM{result['max_loss']:.2f}\n"
+        f"Entry Value     RM{result['capital']:.2f}\n"
         f"```\n"
+        f"*Bursa Fees (Entry):*\n"
+        f"├ Brokerage     RM{entry_fees['brokerage']:.2f}\n"
+        f"├ Platform      RM{entry_fees['platform_fee']:.2f}\n"
+        f"├ Clearing      RM{entry_fees['clearing']:.2f}\n"
+        f"└ Stamp Duty    RM{entry_fees['stamp_duty']:.2f}\n"
+        f"*Entry Fees:    RM{entry_fees['total']:.2f}*\n\n"
+        f"*Total Capital Needed: RM{result['total_capital']:.2f}*\n\n"
+        f"*Max Loss (at SL):*\n"
+        f"├ Price Loss    RM{result['max_loss']:.2f}\n"
+        f"├ Entry Fees    RM{entry_fees['total']:.2f}\n"
+        f"└ Exit Fees     RM{exit_fees['total']:.2f}\n"
+        f"*Total Max Loss: RM{result['max_loss_with_fees']:.2f}*\n\n"
         f"✅ Ready to execute on moomoo\n"
     )
 
