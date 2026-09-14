@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Constants
-EQUITY_DEFAULT = 10000  # RM
+EQUITY_DEFAULT = 10000  # RM (default if not specified in input)
 BURSA_LOT_SIZE = 100    # Shares per lot
 R_MULTIPLIER = {
     1: 1.0,      # 5★
@@ -87,6 +87,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
         sl = None
         atr = None
         stars = None
+        equity = EQUITY_DEFAULT  # Default to RM10,000
         env = "SIMULATE"
 
         for line in lines[1:]:
@@ -96,6 +97,8 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 sl = float(line.replace('SL=', '').strip())
             elif line.startswith('ATR='):
                 atr = float(line.replace('ATR=', '').strip())
+            elif line.startswith('EQUITY='):
+                equity = float(line.replace('EQUITY=', '').strip())
             elif 'STAR' in line.upper() and '=' in line:
                 # Handle "STAR=3" or "STAR=0.25" format
                 try:
@@ -127,10 +130,10 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
             raise ValueError("Missing EP, SL, ATR, or star rating")
 
         # Calculate
-        result = calculate_sizing(code, ep, sl, atr, stars)
+        result = calculate_sizing(code, ep, sl, atr, stars, equity)
 
         # Format response
-        response = format_response(code, ep, sl, atr, stars, result, env)
+        response = format_response(code, ep, sl, atr, stars, result, env, equity)
 
         await update.message.reply_text(response, parse_mode="Markdown")
 
@@ -139,7 +142,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Calculation error: {e}")
 
 
-def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) -> dict:
+def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int, equity: float = EQUITY_DEFAULT) -> dict:
     """Calculate position size using position-size-calculator rules"""
 
     # Validate
@@ -148,7 +151,9 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) ->
     if ep <= sl:
         raise ValueError("EP must be > SL")
     if stars not in [1, 2, 3, 4, 5]:
-        raise ValueError("Stars must be 1-5 (3★ = 0.25R, 4★ = 0.5R, 5★ = 1R)")
+        raise ValueError("Stars must be 1-5")
+    if equity <= 0:
+        raise ValueError("EQUITY must be positive")
 
     # Map stars to R multiplier
     if stars == 5:
@@ -163,8 +168,8 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) ->
         r_mult = 0.05
 
     # Risk calculation
-    # 1R = 1% of equity = RM100 (for RM10,000)
-    risk_amount = EQUITY_DEFAULT * r_mult * 0.01
+    # 1R = 1% of equity
+    risk_amount = equity * r_mult * 0.01
 
     # Use ATR-based Max SL if EP ≥ RM1, else use manual SL
     if ep >= 1.0:
@@ -207,7 +212,7 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int) ->
     }
 
 
-def format_response(code: str, ep: float, sl: float, atr: float, stars: int, result: dict, env: str) -> str:
+def format_response(code: str, ep: float, sl: float, atr: float, stars: int, result: dict, env: str, equity: float = EQUITY_DEFAULT) -> str:
     """Format calculation as pretty table with fees"""
 
     r_label = {1: "0.05R", 2: "0.125R", 3: "0.25R", 4: "0.5R", 5: "1R"}[stars]
@@ -216,7 +221,7 @@ def format_response(code: str, ep: float, sl: float, atr: float, stars: int, res
 
     response = (
         f"📊 *Position Sizing — {code}*\n"
-        f"Environment: `{env}`\n\n"
+        f"Environment: `{env}` | Equity: `RM{equity:,.0f}`\n\n"
         f"*Input:*\n"
         f"└ Entry Price (EP): RM{ep:.2f}\n"
         f"└ Stop Loss (SL): RM{sl:.2f}\n"
@@ -256,10 +261,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "SL=price\n"
         "ATR=value\n"
         "STAR=3\n"
+        "EQUITY=10000\n"
         "Env : REAL`\n\n"
+        "*Optional:*\n"
+        "EQUITY: Your capital (defaults to 10000)\n"
+        "Env: REAL or SIMULATE (defaults to SIMULATE)\n\n"
         "*STAR options:*\n"
         "Star rating: `STAR=1` to `STAR=5`\n"
-        "Or R-value: `STAR=1` (1R), `STAR=0.5` (0.5R), `STAR=0.25` (0.25R), etc.\n\n"
+        "Or R-value: `STAR=1` (1R), `STAR=0.5` (0.5R), etc.\n\n"
         "Get instant position size calculation! ⚡",
         parse_mode="Markdown"
     )
