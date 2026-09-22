@@ -74,7 +74,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
                 "ATR=0.08\n"
                 "STAR=3\n"
                 "Env : REAL`\n\n"
-                "(STAR: use 1-5 for star rating OR 1/0.5/0.25/0.125/0.05 for R-value)\n"
+                "(STAR: use 1-5 for star rating OR 1/0.75/0.5/0.25/0.125/0.05 for R-value)\n"
                 "(Env line optional, defaults to SIMULATE)",
                 parse_mode="Markdown"
             )
@@ -100,17 +100,19 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
             elif line.startswith('EQUITY='):
                 equity = float(line.replace('EQUITY=', '').strip())
             elif 'STAR' in line.upper() and '=' in line:
-                # Handle "STAR=3" or "STAR=0.25" format
+                # Handle "STAR=3" or "STAR=0.75" format
                 try:
                     star_value_str = line.split('=')[1].strip()
                     star_value = float(star_value_str)
 
-                    # Map to star rating (1-5)
+                    # Map to star rating (1-5, or float for special cases like 0.75R)
                     if star_value in [1, 2, 3, 4, 5]:
                         # Direct star rating (1-5)
                         stars = int(star_value)
                     elif star_value == 1.0:
                         stars = 5  # 1R = 5 star
+                    elif star_value == 0.75:
+                        stars = 4.5  # 0.75R = 4.5 star (new)
                     elif star_value == 0.5:
                         stars = 4  # 0.5R = 4 star
                     elif star_value == 0.25:
@@ -142,7 +144,7 @@ async def calculate_position(update: Update, context: ContextTypes.DEFAULT_TYPE)
         logger.error(f"Calculation error: {e}")
 
 
-def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int, equity: float = EQUITY_DEFAULT) -> dict:
+def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: float, equity: float = EQUITY_DEFAULT) -> dict:
     """Calculate position size using position-size-calculator rules"""
 
     # Validate
@@ -150,14 +152,16 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int, eq
         raise ValueError("EP, SL, ATR must be positive")
     if ep <= sl:
         raise ValueError("EP must be > SL")
-    if stars not in [1, 2, 3, 4, 5]:
-        raise ValueError("Stars must be 1-5")
+    if stars not in [1, 2, 3, 4, 4.5, 5]:
+        raise ValueError("Stars must be 1-5 or 4.5 (for 0.75R)")
     if equity <= 0:
         raise ValueError("EQUITY must be positive")
 
     # Map stars to R multiplier
     if stars == 5:
         r_mult = 1.0
+    elif stars == 4.5:
+        r_mult = 0.75  # 0.75R
     elif stars == 4:
         r_mult = 0.5
     elif stars == 3:
@@ -236,10 +240,10 @@ def calculate_sizing(code: str, ep: float, sl: float, atr: float, stars: int, eq
     }
 
 
-def format_response(code: str, ep: float, sl: float, atr: float, stars: int, result: dict, env: str, equity: float = EQUITY_DEFAULT) -> str:
+def format_response(code: str, ep: float, sl: float, atr: float, stars: float, result: dict, env: str, equity: float = EQUITY_DEFAULT) -> str:
     """Format calculation as pretty table with fees"""
 
-    r_label = {1: "0.05R", 2: "0.125R", 3: "0.25R", 4: "0.5R", 5: "1R"}[stars]
+    r_label = {1: "0.05R", 2: "0.125R", 3: "0.25R", 4: "0.5R", 4.5: "0.75R", 5: "1R"}[stars]
     entry_fees = result['entry_fees']
     exit_fees = result['exit_fees']
 
@@ -299,7 +303,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Env: REAL or SIMULATE (defaults to SIMULATE)\n\n"
         "*STAR options:*\n"
         "Star rating: `STAR=1` to `STAR=5`\n"
-        "Or R-value: `STAR=1` (1R), `STAR=0.5` (0.5R), etc.\n\n"
+        "Or R-value: `STAR=1` (1R), `STAR=0.75` (0.75R), `STAR=0.5` (0.5R), etc.\n\n"
         "Get instant position size calculation! ⚡",
         parse_mode="Markdown"
     )
