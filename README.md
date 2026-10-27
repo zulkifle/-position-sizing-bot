@@ -23,6 +23,25 @@ ATR=0.08
 Env : REAL
 ```
 
+### US stocks (moomoo fractional shares)
+
+First line starts with `US.` — prices in USD:
+
+```
+US.AAPL
+EP=50.00
+SL=48.50
+ATR=1.20
+STAR=4
+Env : REAL
+```
+
+- Equity stays in RM (`EQUITY=`, default RM10,000), converted at a fixed FX of 1 USD = RM4.08 (override with `FX=4.10`)
+- EP ≥ $5 → risk/share = ATR; EP < $5 → risk/share = EP − SL
+- Shares floored to 0.0001 (fractional), plus a whole-share option
+- moomoo MY US fees included (entry + exit): commission 0.03% (rounded up to $0.01), platform $0.99/order, settlement $0.003/share (max 1%), SEC fee 0.0000206 on sells (min $0.01), CAT $0.000003/share, stamp duty RM1 per RM1,000 (max RM1,000). Size is reduced until total max loss incl. fees ≤ target risk
+- Warns when the buy is below moomoo's $5 fractional minimum
+
 ## Output Example
 
 ```
