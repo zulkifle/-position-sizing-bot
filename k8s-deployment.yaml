@@ -1,72 +1,48 @@
+# Rancher sandbox deployment — long polling, outbound-only (no Service/NodePort needed)
+#
+# Secret is created by command, not stored in git:
+#   kubectl create secret generic position-sizing-bot-secret \
+#     --from-literal=bot-token=<NEW_TOKEN_FROM_BOTFATHER> -n sandbox
+#
+# Deploy:
+#   kubectl apply -f k8s-deployment.yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: position-sizing-bot
-  namespace: default
+  name: customsupp
+  namespace: sandbox
+  labels:
+    app: customsupp
 spec:
-  replicas: 1
+  replicas: 1   # must stay 1 — two pollers on one token conflict (409)
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
-      app: position-sizing-bot
+      app: customsupp
   template:
     metadata:
       labels:
-        app: position-sizing-bot
+        app: customsupp
     spec:
       containers:
-      - name: bot
-        image: zulkifle/position-sizing-bot:latest  # Replace with your Docker Hub username
+      - name: customsupp
+        image: localhost:30445/customsupp:1.2
         imagePullPolicy: Always
         env:
         - name: TELEGRAM_BOT_TOKEN
           valueFrom:
             secretKeyRef:
-              name: telegram-secret
+              name: customsupp-secret
               key: bot-token
-        - name: RAILWAY_PUBLIC_DOMAIN
-          value: "position-sizing-bot.YOUR_DOMAIN.com"  # Replace with your domain
-        - name: PORT
-          value: "8080"
-        ports:
-        - containerPort: 8080
-          name: http
-        livenessProbe:
-          exec:
-            command:
-            - python
-            - -c
-            - import telegram; print('OK')
-          initialDelaySeconds: 10
-          periodSeconds: 30
-          timeoutSeconds: 5
+        - name: BOT_MODE
+          value: "polling"
+        - name: TZ
+          value: "Asia/Kuala_Lumpur"
         resources:
           requests:
-            cpu: 100m
-            memory: 128Mi
+            cpu: 20m
+            memory: 64Mi
           limits:
-            cpu: 500m
-            memory: 256Mi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: position-sizing-bot
-  namespace: default
-spec:
-  type: LoadBalancer
-  selector:
-    app: position-sizing-bot
-  ports:
-  - port: 80
-    targetPort: 8080
-    protocol: TCP
-    name: http
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: telegram-secret
-  namespace: default
-type: Opaque
-stringData:
-  bot-token: "YOUR_BOT_TOKEN_HERE"  # Replace with actual token
+            cpu: 200m
+            memory: 128Mi

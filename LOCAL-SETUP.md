@@ -72,12 +72,6 @@ curl -X POST https://api.telegram.org/bot<TOKEN>/setWebhook \
   -d url=https://abc123def456.ngrok.io/<TOKEN>
 ```
 
-Example:
-```bash
-curl -X POST https://api.telegram.org/bot8375319438:AAH6iMLzESIWm1v46YisamzoeOWm4klMFQY/setWebhook \
-  -d url=https://abc123def456.ngrok.io/8375319438:AAH6iMLzESIWm1v46YisamzoeOWm4klMFQY
-```
-
 ### 6. Test Telegram Bot
 
 - Send message to your bot in Telegram
