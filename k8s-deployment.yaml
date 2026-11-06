@@ -1,8 +1,13 @@
 # Rancher sandbox deployment — long polling, outbound-only (no Service/NodePort needed)
 #
 # Secret is created by command, not stored in git:
-#   kubectl create secret generic position-sizing-bot-secret \
-#     --from-literal=bot-token=<NEW_TOKEN_FROM_BOTFATHER> -n sandbox
+#   kubectl create secret generic customsupp-secret \
+#     --from-literal=bot-token=<NEW_TOKEN_FROM_BOTFATHER> \
+#     --from-literal=anthropic-api-key=<ANTHROPIC_API_KEY> -n sandbox
+#
+# Secret already exists (bot-token only)? Add the Anthropic key without touching the token:
+#   kubectl patch secret customsupp-secret -n sandbox \
+#     -p '{"stringData":{"anthropic-api-key":"<ANTHROPIC_API_KEY>"}}'
 #
 # Deploy:
 #   kubectl apply -f k8s-deployment.yaml
@@ -27,7 +32,7 @@ spec:
     spec:
       containers:
       - name: customsupp
-        image: localhost:30445/customsupp:1.2
+        image: localhost:30445/customsupp:1.3
         imagePullPolicy: Always
         env:
         - name: TELEGRAM_BOT_TOKEN
@@ -37,6 +42,19 @@ spec:
               key: bot-token
         - name: BOT_MODE
           value: "polling"
+        # FCPO morning brief (Mon-Fri). Without the key it sends the scorecard only.
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: customsupp-secret
+              key: anthropic-api-key
+              optional: true
+        - name: FCPO_BRIEF_CHAT_ID
+          value: ""          # send /chatid to the bot, paste the number here
+        - name: FCPO_BRIEF_TIME
+          value: "09:45"     # MYT, before the 10:30 FCPO open
+        - name: FCPO_BRIEF_MODEL
+          value: "claude-opus-5-5"
         - name: TZ
           value: "Asia/Kuala_Lumpur"
         resources:
@@ -45,4 +63,4 @@ spec:
             memory: 64Mi
           limits:
             cpu: 200m
-            memory: 128Mi
+            memory: 256Mi   # anthropic SDK + scheduler

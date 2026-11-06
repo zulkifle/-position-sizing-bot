@@ -8,8 +8,12 @@ import os
 import re
 import math
 import logging
+from datetime import time as dtime
 from telegram import Update
-from telegram.ext import Application, MessageHandler, filters, ContextTypes
+from telegram.constants import ParseMode
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
+
+from fcpo_brief import MYT, build_brief
 
 # Logging
 logging.basicConfig(level=logging.INFO)
@@ -530,9 +534,72 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "*STAR options:*\n"
         "Star rating: `STAR=1` to `STAR=5`\n"
         "Or R-value: `STAR=1` (1R), `STAR=0.75` (0.75R), `STAR=0.5` (0.5R), etc.\n\n"
-        "Get instant position size calculation! ⚡",
+        "Get instant position size calculation! ⚡\n\n"
+        "🌴 `/fcpo` — FCPO morning brief now (auto Mon-Fri 9:45am)\n"
+        "`/chatid` — show this chat's ID",
         parse_mode="Markdown"
     )
+
+
+def brief_chat_id() -> int | None:
+    """Chat that receives the FCPO morning brief (FCPO_BRIEF_CHAT_ID)"""
+    value = os.getenv('FCPO_BRIEF_CHAT_ID', '').strip()
+    return int(value) if value else None
+
+
+async def send_fcpo_brief(context: ContextTypes.DEFAULT_TYPE, chat_id: int):
+    try:
+        brief = await build_brief()
+    except Exception as e:
+        logger.exception("FCPO brief failed")
+        brief = f"❌ FCPO brief gagal: {e}"
+    await context.bot.send_message(chat_id, brief, parse_mode=ParseMode.HTML)
+
+
+async def fcpo_daily_job(context: ContextTypes.DEFAULT_TYPE):
+    """Scheduled morning brief"""
+    await send_fcpo_brief(context, context.job.chat_id)
+
+
+async def fcpo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/fcpo — brief on demand, only for the configured chat (each run costs API credits)"""
+    allowed = brief_chat_id()
+    if allowed is None:
+        await update.message.reply_text(
+            "FCPO_BRIEF_CHAT_ID belum set. Chat ID awak: "
+            f"`{update.effective_chat.id}`",
+            parse_mode="Markdown",
+        )
+        return
+    if update.effective_chat.id != allowed:
+        return
+    await update.message.reply_text("⏳ Sedang sediakan FCPO brief...")
+    await send_fcpo_brief(context, allowed)
+
+
+async def chatid_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/chatid — show this chat's ID (for FCPO_BRIEF_CHAT_ID)"""
+    await update.message.reply_text(f"Chat ID: `{update.effective_chat.id}`", parse_mode="Markdown")
+
+
+def schedule_fcpo_brief(app: Application):
+    """Mon–Fri at FCPO_BRIEF_TIME (HH:MM MYT, default 09:45 — before the 10:30 open)"""
+    chat_id = brief_chat_id()
+    if chat_id is None:
+        logger.warning("FCPO_BRIEF_CHAT_ID not set — daily FCPO brief disabled (use /chatid to get it)")
+        return
+    if not os.getenv('ANTHROPIC_API_KEY'):
+        logger.warning("ANTHROPIC_API_KEY not set — FCPO brief will send the scorecard only")
+
+    hh, mm = (int(x) for x in os.getenv('FCPO_BRIEF_TIME', '09:45').split(':'))
+    app.job_queue.run_daily(
+        fcpo_daily_job,
+        time=dtime(hh, mm, tzinfo=MYT),
+        days=(1, 2, 3, 4, 5),  # PTB v20+: 0 = Sunday, so 1-5 = Mon-Fri
+        chat_id=chat_id,
+        name="fcpo_morning_brief",
+    )
+    logger.info(f"FCPO brief scheduled Mon-Fri {hh:02d}:{mm:02d} MYT → chat {chat_id}")
 
 
 def main():
@@ -545,9 +612,13 @@ def main():
     # Create application
     app = Application.builder().token(token).build()
 
-    # Add handlers
+    # Add handlers — specific commands before the catch-all /start help
+    app.add_handler(CommandHandler("fcpo", fcpo_command))
+    app.add_handler(CommandHandler("chatid", chatid_command))
     app.add_handler(MessageHandler(filters.COMMAND, start))
     app.add_handler(MessageHandler(filters.TEXT, calculate_position))
+
+    schedule_fcpo_brief(app)
 
     # BOT_MODE=polling (default): outbound-only, no public URL/port needed
     # BOT_MODE=webhook: Railway-style, needs RAILWAY_PUBLIC_DOMAIN

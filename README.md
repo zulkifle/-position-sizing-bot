@@ -63,6 +63,25 @@ Max Loss (SL)   RM24.00
 ✅ Ready to execute on moomoo
 ```
 
+## FCPO Morning Brief (Mon–Fri, 09:45 MYT)
+
+Pre-open sentiment for Bursa Malaysia crude palm oil futures, sent before the 10:30 open.
+
+- **Scorecard (rule-based):** FCPO trend (latest 3rd-month settlement vs the ~10-day average from MPOC), CBOT soyoil (±0.3%), Brent (±0.5%), USD/MYR (±0.15%, weaker ringgit = +1), all from MPOC + Yahoo Finance. Claude adds Dalian and export scores from the news.
+- **Bias:** total ≥ +2 = 🟢 BULLISH, ≤ −2 = 🔴 BEARISH, otherwise 🟡 NEUTRAL.
+- **Narrative (Claude + web search):** yesterday's close, overnight markets, fundamentals (exports, MPOB, Indonesia), levels, today's events.
+- Without `ANTHROPIC_API_KEY`, the brief still sends the scorecard only.
+
+| Env var | Purpose |
+|---|---|
+| `ANTHROPIC_API_KEY` | Claude API key (K8s: secret `customsupp-secret`, key `anthropic-api-key`) |
+| `FCPO_BRIEF_CHAT_ID` | Chat that receives the brief — send `/chatid` to the bot to get it |
+| `FCPO_BRIEF_TIME` | `HH:MM` MYT, default `09:45` |
+| `FCPO_BRIEF_MODEL` | default `claude-opus-5-5` |
+
+Commands: `/fcpo` (brief now — only in the configured chat), `/chatid`.
+Test locally without Telegram: `python fcpo_brief.py`.
+
 ## Quick Deploy (Railway.app) — 5 Minit
 
 ### Step 1: Get Telegram Bot Token
